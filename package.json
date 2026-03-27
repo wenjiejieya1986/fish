@@ -1,0 +1,23 @@
+{
+  "name": "feishu-reimbursement",
+  "version": "1.0.0",
+  "description": "飞书报销付款统计工作流",
+  "scripts": {
+    "dev": "node_modules/.bin/vercel dev",
+    "build": "tsc",
+    "start": "vercel start"
+  },
+  "dependencies": {
+    "@vercel/node": "^3.0.0",
+    "axios": "^1.6.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vercel": "^50.37.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
