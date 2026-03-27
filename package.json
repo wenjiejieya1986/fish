@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "description": "飞书报销付款统计工作流",
   "scripts": {
-    "dev": "node_modules/.bin/vercel dev",
-    "build": "tsc",
-    "start": "vercel start"
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
   },
   "dependencies": {
     "@vercel/node": "^3.0.0",
@@ -14,10 +13,9 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.0.0",
-    "vercel": "^50.37.0"
+    "typescript": "^5.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "18.x"
   }
 }
