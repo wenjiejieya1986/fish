@@ -1,4 +1,6 @@
 import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
 
 export async function sendMessage(
   openIds: string[],
@@ -32,6 +34,37 @@ export async function sendMessage(
 
 export async function sendTextMessage(openIds: string[], text: string): Promise<void> {
   await sendMessage(openIds, 'text', { text });
+}
+
+export async function sendFileMessage(openIds: string[], filePath: string, fileName: string): Promise<void> {
+  for (const openId of openIds) {
+    try {
+      const fileBuffer = fs.readFileSync(filePath);
+      const formData = new FormData();
+
+      const fileBlob = new Blob([fileBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      formData.append('file', fileBlob, fileName);
+      formData.append('file_name', fileName);
+      formData.append('file_size', fileBuffer.length.toString());
+      formData.append('receive_id', openId);
+      formData.append('receive_id_type', 'open_id');
+
+      const response = await axios.post(
+        'https://open.feishu.cn/open-apis/im/v1/files',
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.FEISHU_BOT_TOKEN}`,
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      console.log(`文件已发送给 ${openId}:`, response.data);
+    } catch (error: any) {
+      console.error(`发送文件给 ${openId} 失败:`, error.response?.data || error.message);
+    }
+  }
 }
 
 export async function sendInteractiveMessage(
