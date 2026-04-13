@@ -127,13 +127,23 @@ function isDateInRange(dateStr, startTime, endTime) {
     return date >= startTime && date <= endTime;
 }
 async function processMonthlyReport() {
-    const monthName = (0, date_1.getLastMonthName)();
-    const { startTime, endTime } = (0, date_1.getLastMonthDateRange)();
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
+    // 上个月
+    const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
+    const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
+    // 报表月份名称
+    const monthName = `${lastMonthYear}年${lastMonth + 1}月`;
+    // 统计周期（付款日期）：上个月1日到上个月最后一天
+    const startTime = new Date(lastMonthYear, lastMonth, 1).getTime();
+    const endTime = new Date(lastMonthYear, lastMonth + 1, 0, 23, 59, 59).getTime(); // 上个月最后一天
     console.log(`开始处理 ${monthName} 报表...`);
     console.log(`统计周期(付款日期): ${new Date(startTime).toISOString()} - ${new Date(endTime).toISOString()}`);
-    // 查询更宽的时间范围(最近6个月)，用于获取所有可能的审批数据
-    const queryStartTime = startTime - 180 * 24 * 60 * 60 * 1000; // 往前6个月
-    console.log(`查询审批时间范围(提交日期): ${new Date(queryStartTime).toISOString()} - ${new Date(endTime).toISOString()}`);
+    // 查询提交日期范围：上个月1日到今天
+    const queryStartTime = startTime;
+    const queryEndTime = now.getTime();
+    console.log(`查询审批时间范围(提交日期): ${new Date(queryStartTime).toISOString()} - ${new Date(queryEndTime).toISOString()}`);
     try {
         console.log('获取报销申请数据...');
         const reimbursementResult = await (0, approval_1.getApprovalInstanceList)(config_1.config.feishu.approvalCode, queryStartTime, endTime);
@@ -143,15 +153,25 @@ async function processMonthlyReport() {
         const paymentResult = await (0, approval_1.getApprovalInstanceList)(config_1.config.feishu.approvalCodePayment, queryStartTime, endTime);
         const paymentInstances = paymentResult.data.filter((instance) => instance.status === 'APPROVED' || instance.status === 2);
         console.log(`获取到 ${paymentInstances.length} 条付款申请`);
-        // 转换数据并按付款日期过滤
-        const reimbursementData = transformReimbursementData(reimbursementInstances).filter(record => {
+        const reimbursementData = transformReimbursementData(reimbursementInstances);
+        console.log('\n=== 报销申请原始数据 ===');
+        reimbursementData.forEach((record, index) => {
+            console.log(`${index + 1}. 申请人=${record.申请人}, 付款日期=${record.付款日期}, 金额=${record.金额}, 用途=${record.用途}`);
+        });
+        const filteredReimbursementData = reimbursementData.filter(record => {
             return isDateInRange(record.付款日期, startTime, endTime);
         });
-        const paymentData = transformPaymentData(paymentInstances).filter(record => {
+        console.log(`\n根据付款日期过滤后: 报销 ${filteredReimbursementData.length} 条`);
+        const paymentData = transformPaymentData(paymentInstances);
+        console.log('\n=== 付款申请原始数据 ===');
+        paymentData.forEach((record, index) => {
+            console.log(`${index + 1}. 所属公司=${record.所属公司}, 付款日期=${record.付款日期}, 金额=${record.金额}, 付款原因=${record.付款原因}`);
+        });
+        const filteredPaymentData = paymentData.filter(record => {
             return isDateInRange(record.付款日期, startTime, endTime);
         });
-        console.log(`根据付款日期过滤后: 报销 ${reimbursementData.length} 条, 付款 ${paymentData.length} 条`);
-        const excelBuffer = await (0, excel_1.generateExcel)(reimbursementData, paymentData, monthName);
+        console.log(`\n根据付款日期过滤后: 付款 ${filteredPaymentData.length} 条`);
+        const excelBuffer = await (0, excel_1.generateExcel)(filteredReimbursementData, filteredPaymentData, monthName);
         console.log(`Excel 文件已生成，大小: ${excelBuffer.length} bytes`);
         const excelFilePath = (0, excel_1.saveExcelToFile)(excelBuffer, monthName);
         console.log(`Excel 文件路径: ${excelFilePath}`);

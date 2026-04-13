@@ -1,30 +1,24 @@
-const ExcelJS = require('exceljs');
+const XLSX = require('xlsx');
 
-async function readExcel() {
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile('/Users/wenjiana/Desktop/项目文件/飞书报销付款/exports/2026年03月报销付款统计报表.xlsx');
+const workbook = XLSX.readFile('/Users/wenjiana/Desktop/项目文件/飞书报销付款/exports/2026年3月报销付款统计报表.xlsx');
 
-  console.log('工作表:', workbook.worksheets.map(s => s.name));
+const sheet = workbook.Sheets['报销登记表'];
+const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
-  const sheet = workbook.getWorksheet('报销登记表');
-  console.log('\n报销登记表结构:');
-  sheet.eachRow((row, rowNum) => {
-    const cells = [];
-    row.eachCell((cell, colNum) => {
-      if (cell.value !== undefined) {
-        cells.push(`${String.fromCharCode(64+colNum)}=${JSON.stringify(cell.value)}`);
-        if (cell.fill && cell.fill.fgColor) {
-          console.log(`  ${String.fromCharCode(64+colNum)}${rowNum} 填充色:`, cell.fill.fgColor.argb);
-        }
-        if (cell.border && cell.border.top && cell.border.top.style) {
-          console.log(`  ${String.fromCharCode(64+colNum)}${rowNum} 边框:`, cell.border.top.style);
-        }
-      }
-    });
-    if (cells.length > 0) {
-      console.log(`行${rowNum}:`, cells.join(', '));
-    }
-  });
+console.log('=== 报销登记表 ===');
+for (let i = 0; i < data.length; i++) {
+  const row = data[i];
+  if (row && (row[3] || row[4] || row[6])) {
+    console.log(`行${i + 1}: 申请人=${row[6]}, 付款日期=${row[5]}, 金额=${row[4]}, 用途=${row[3]}`);
+  }
 }
 
-readExcel();
+console.log('\n=== 付款登记表 ===');
+const paymentSheet = workbook.Sheets['付款登记表'];
+const paymentData = XLSX.utils.sheet_to_json(paymentSheet, { header: 1 });
+for (let i = 0; i < paymentData.length; i++) {
+  const row = paymentData[i];
+  if (row && (row[2] || row[3] || row[4])) {
+    console.log(`行${i + 1}: 所属公司=${row[0]}, 付款日期=${row[4]}, 金额=${row[3]}, 付款原因=${row[2]}`);
+  }
+}
