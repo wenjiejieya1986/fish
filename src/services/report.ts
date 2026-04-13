@@ -48,13 +48,8 @@ function extractFieldValue(instance: any, fieldName: string): any {
     return '';
   }
 
-  console.log(`\n提取字段 "${fieldName}", 表单字段数量: ${form.length}`);
-  
   for (const item of form) {
-    console.log(`  检查字段: name="${item.name}", field_name="${item.field_name}", type="${item.type}"`);
-    
     if (item.name === fieldName || item.field_name === fieldName) {
-      console.log(`  ✓ 找到匹配字段: ${fieldName} = ${JSON.stringify(item.value)}`);
       if (item.value !== undefined && item.value !== null) {
         if (typeof item.value === 'object') {
           if (Array.isArray(item.value)) {
@@ -65,49 +60,91 @@ function extractFieldValue(instance: any, fieldName: string): any {
         return item.value;
       }
     }
-    
-    if (item.type === 'fieldList' && Array.isArray(item.value)) {
-      console.log(`  检查 fieldList, 行数: ${item.value.length}`);
-      for (const row of item.value) {
-        if (Array.isArray(row)) {
-          for (const field of row) {
-            console.log(`    fieldList 字段: name="${field.name}", value="${field.value}"`);
-            if (field.name === fieldName || field.field_name === fieldName) {
-              console.log(`    ✓ 在 fieldList 中找到匹配字段: ${fieldName} = ${JSON.stringify(field.value)}`);
-              if (field.value !== undefined && field.value !== null) {
-                if (typeof field.value === 'object') {
-                  if (Array.isArray(field.value)) {
-                    return field.value.join(', ');
-                  }
-                  return field.value.text || field.value.name || field.value.number || JSON.stringify(field.value);
-                }
-                return field.value;
-              }
-            }
+  }
+  return '';
+}
+
+function extractFieldListRows(instance: any): any[] {
+  const formStr = instance.form || '[]';
+  let form: any[];
+  
+  try {
+    form = typeof formStr === 'string' ? JSON.parse(formStr) : formStr;
+  } catch (e) {
+    console.error('解析表单数据失败:', e);
+    return [];
+  }
+
+  for (const item of form) {
+    if (item.type === 'fieldList' && Array.isArray(item.value) && item.value.length > 0) {
+      return item.value;
+    }
+  }
+  return [];
+}
+
+function extractFieldFromRow(row: any[], fieldName: string): any {
+  if (!Array.isArray(row)) return '';
+  for (const field of row) {
+    if (field.name === fieldName) {
+      if (field.value !== undefined && field.value !== null) {
+        if (typeof field.value === 'object') {
+          if (Array.isArray(field.value)) {
+            return field.value.join(', ');
           }
+          return field.value.text || field.value.name || field.value.number || JSON.stringify(field.value);
         }
+        return field.value;
       }
     }
   }
-  console.log(`  ✗ 未找到字段: ${fieldName}`);
   return '';
 }
 
 function transformReimbursementData(instances: any[]): ReimbursementRecord[] {
-  return instances.map((instance) => {
-    return {
-      所属公司: extractFieldValue(instance, '所属公司'),
-      所属项目: extractFieldValue(instance, '所属项目'),
-      报销类型: extractFieldValue(instance, '报销类型'),
-      用途: extractFieldValue(instance, '用途'),
-      金额: parseFloat(extractFieldValue(instance, '金额')) || 0,
-      付款日期: formatDate(parseDateFromString(extractFieldValue(instance, '付款日期'))),
-      申请人: extractFieldValue(instance, '申请人'),
-      支付凭证: extractFieldValue(instance, '支付凭证'),
-      总金额: parseFloat(extractFieldValue(instance, '总金额')) || 0,
-      报销人银行卡: extractFieldValue(instance, '报销人银行卡'),
-    };
-  });
+  const records: ReimbursementRecord[] = [];
+  
+  for (const instance of instances) {
+    const 所属公司 = extractFieldValue(instance, '所属公司');
+    const 所属项目 = extractFieldValue(instance, '所属项目');
+    const 报销类型 = extractFieldValue(instance, '报销类型');
+    const 申请人 = extractFieldValue(instance, '申请人');
+    const 报销人银行卡 = extractFieldValue(instance, '报销人银行卡');
+    
+    const fieldListRows = extractFieldListRows(instance);
+    
+    if (fieldListRows.length > 0) {
+      for (const row of fieldListRows) {
+        records.push({
+          所属公司,
+          所属项目,
+          报销类型,
+          用途: extractFieldFromRow(row, '用途'),
+          金额: parseFloat(extractFieldFromRow(row, '金额')) || 0,
+          付款日期: formatDate(parseDateFromString(extractFieldFromRow(row, '付款日期'))),
+          申请人,
+          支付凭证: extractFieldFromRow(row, '支付凭证'),
+          总金额: 0,
+          报销人银行卡,
+        });
+      }
+    } else {
+      records.push({
+        所属公司,
+        所属项目,
+        报销类型,
+        用途: extractFieldValue(instance, '用途'),
+        金额: parseFloat(extractFieldValue(instance, '金额')) || 0,
+        付款日期: formatDate(parseDateFromString(extractFieldValue(instance, '付款日期'))),
+        申请人,
+        支付凭证: extractFieldValue(instance, '支付凭证'),
+        总金额: parseFloat(extractFieldValue(instance, '总金额')) || 0,
+        报销人银行卡,
+      });
+    }
+  }
+  
+  return records;
 }
 
 function transformPaymentData(instances: any[]): PaymentRecord[] {
@@ -144,6 +181,7 @@ export async function processMonthlyReport(): Promise<ProcessResult> {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
+  const currentDay = now.getDate();
 
   // 上个月
   const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
@@ -159,9 +197,10 @@ export async function processMonthlyReport(): Promise<ProcessResult> {
   console.log(`开始处理 ${monthName} 报表...`);
   console.log(`统计周期(付款日期): ${new Date(startTime).toISOString()} - ${new Date(endTime).toISOString()}`);
 
-  // 查询提交日期范围：上个月1日到今天
+  // 查询提交日期范围：上个月1日到本月5号（或今天，如果今天小于5号）
   const queryStartTime = startTime;
-  const queryEndTime = now.getTime();
+  const queryEndDay = currentDay < 5 ? currentDay : 5;
+  const queryEndTime = new Date(currentYear, currentMonth, queryEndDay, 23, 59, 59).getTime();
   console.log(`查询审批时间范围(提交日期): ${new Date(queryStartTime).toISOString()} - ${new Date(queryEndTime).toISOString()}`);
 
   try {
@@ -169,7 +208,7 @@ export async function processMonthlyReport(): Promise<ProcessResult> {
     const reimbursementResult = await getApprovalInstanceList(
       config.feishu.approvalCode,
       queryStartTime,
-      endTime
+      queryEndTime
     );
     const reimbursementInstances = reimbursementResult.data.filter(
       (instance) => instance.status === 'APPROVED' || instance.status === 2
@@ -180,7 +219,7 @@ export async function processMonthlyReport(): Promise<ProcessResult> {
     const paymentResult = await getApprovalInstanceList(
       config.feishu.approvalCodePayment,
       queryStartTime,
-      endTime
+      queryEndTime
     );
     const paymentInstances = paymentResult.data.filter(
       (instance) => instance.status === 'APPROVED' || instance.status === 2
