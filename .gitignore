@@ -2,3 +2,7 @@ node_modules
 .env
 dist
 .vercel
+api/**/*.js
+src/**/*.js
+exports/
+*.xlsx
