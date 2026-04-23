@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "飞书报销付款统计工作流",
   "scripts": {
-    "build": "tsc",
     "dev": "vercel dev",
     "deploy": "vercel --prod"
   },
